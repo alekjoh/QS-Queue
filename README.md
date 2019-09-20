@@ -8,4 +8,4 @@ Some functionalities:\
 -Join a queue given name/id\
 -Adding several exercises and/or students\
 -Leave a queue given a subject\
--Find info about people in different subjects (names, emails, subjectPersonID, exercises completed etc.)\
+-Find info about people in different subjects (names, emails, subjectPersonID, exercises completed etc.)

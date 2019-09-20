@@ -11,7 +11,7 @@ Some functionalities:\
 -Find info about people in different subjects (names, emails, subjectPersonID, exercises completed etc.)
 
 
-Prerequisites:
-Python (Prob with version >= 3)
-Requests library (pip install requests)
+Prerequisites:\
+Python (Prob with version >= 3)\
+Requests library (pip install requests)\
 Something that can run Python code.

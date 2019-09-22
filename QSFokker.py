@@ -4,11 +4,10 @@ import json
 """
 ABOUT:
 
-A simple class for quickly adding yourself (and potential others) to a QS queue.... That's really it. I mean, it can 
-you from the queue too, but it is pretty useless to have a script do this for you. Besides the program would then have
-to run constantly so that the queueID is saved in the instance of the class otherwise it will not know what your queueID
-is and it won't be able to remove you from the queue... so yeah. It is pretty good at adding you to the queue, then 
-immediately removing you if you just want to see a use flash in and out of QS' existence. 
+A simple class for quickly adding yourself (and potential others) to a QS queue.... That's really it. I mean, it can
+remove you from the queue too, but it is pretty useless to have a script do this for you. It can also "troll" someone
+by constantly removing someone from the queue so that they can't join, or you can add lots of people into the queue
+with invalid exercises for fun.
 
 Oh yeah, you can also get info about students in different subjects and the ones that are already queued up.
 """
@@ -213,9 +212,79 @@ class QS:
             if p["personFirstName"] == firstname and p["personLastName"] == lastname or p["personFirstName"].startswith(firstname) and p["personLastName"].startswith(lastname):
                 return p
 
-    # Probably useless method... Indeed
+    """
+    Method for getting the subjectPersonID based on a firstname, lastname and a subject.
+    """
     def get_person_ID(self, firstname, lastname, subject):
         return self.find_person(firstname, lastname, subject=subject)["subjectPersonID"]
+
+    """
+    Method for adding a person to the queue alone. It basically exploits the fact that if you add yourself to the queue
+    with somebody, then add yourself to the queue alone, it will create two entries in the queue. 1 with the group you
+    added all alone and yourself. So if you remove yourself after adding yourself twice, the group will be left behind
+    in the queue, effectively adding only them to the queue.
+    """
+    def add_person(self, firstname, lastname, subject, roomID=6, desk=1, exercises=[3.141592653589793]):
+        self.add_to_queue(subject=subject, roomID=roomID, desk=desk, exercises=exercises, persons=[" ".join([firstname, lastname])])
+        self.add_to_queue(subject=subject, roomID=roomID, desk=desk, exercises=exercises)
+        self.remove_from_queue(subject=subject)
+
+    """
+    Same as add person but it uses a personID instead of a name
+    """
+    def add_person_id(self, subject, personID, roomID=6, desk=1, exercises=[3.141592653589793]):
+        self.add_to_queue_with_id(subject=subject, personID=personID, roomID=roomID, desk=desk, exercises=exercises)
+        self.add_to_queue(subject=subject, roomID=roomID, desk=desk, exercises=exercises)
+        self.remove_from_queue(subject=subject)
+
+    """
+    Method for adding every single student in a subject that are not currently in the queue.
+    """
+    def add_all(self, subject, roomID=6, desk=1, exercices=[3.141592653589793]):
+        people_not_in_queue = self.get_people(subject=subject)
+
+        for people in people_not_in_queue:
+            self.add_person_id(subject=subject, personID=people["subjectPersonID"], roomID=roomID, desk=desk, exercises=exercices)
+
+    """
+    Same as add_to_queue just that it adds people based on their id instead of their names. Useful for trying to add
+    lots of random people.
+    """
+    def add_to_queue_with_id(self, subject, personID, roomID, desk, exercises, message=None, help=False):
+        payload = {
+            "subjectID": self.subjectIDs[subject],
+            "roomID": roomID,
+            "desk": desk,
+            "message": message,
+            "help": help,
+            "exercises": exercises
+        }
+
+        req = requests.post(self.addURL, data=json.dumps(payload), headers=self.headers)
+        self.queueID = req.text.split(":")[-1][:-1]
+        print(self.queueID)
+
+        if req.status_code == 200:
+            print("Added to queue for assignment(s) {}".format(", ".join(str(s) for s in exercises)))
+        else:
+            print("Error. We got status code: {}".format(req.status_code))
+            print("Content: {}".format(req.content))
+            exit(1)
+
+        add_person_payload = {
+            "exercises": exercises,
+            "queueElementID": self.queueID,
+            "subjectPersonID": personID
+        }
+
+        req = requests.post(url=self.add_personURL, data=json.dumps(add_person_payload), headers=self.headers)
+
+        if req.status_code != 200:
+            print("We got")
+            print(req.status_code)
+            print(req.reason)
+            print(req.content)
+            exit(1)
 
     """
     Method for getting the current queue for a specific subject. It's only argument is the subject name. It will request
@@ -232,6 +301,11 @@ class QS:
         if req.status_code == 200:
             return req.json()
 
+    """
+    Method for getting the queueID of a person in a subject. This method is basically a helper method for the 
+    remove_from_queue method. To remove someone you need to know the queueID, so this method finds that id based on
+    the subject and the personSubjectID.
+    """
     def get_queueID(self, subject, personSubjectID):
         queue = self.get_queue(subject=subject)
 

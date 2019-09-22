@@ -41,6 +41,7 @@ class QS:
         self.subjectURL = "https://qs.stud.iie.ntnu.no/res/subject"
         self.buildingURL = "https://qs.stud.iie.ntnu.no/res/building"           # Most useless link, it is never used anywhere.
         self.studentsURL = "https://qs.stud.iie.ntnu.no/res/studentsInSubject"
+        self.postponeURL = "https://qs.stud.iie.ntnu.no/res/studentPostponeQueueElement"
 
         self.subjectIDs = {
             "meth": 128,
@@ -103,7 +104,6 @@ class QS:
 
         req = requests.post(self.addURL, data=json.dumps(payload), headers=self.headers)
         self.queueID = req.text.split(":")[-1][:-1]
-        print(self.queueID)
 
         if req.status_code == 200:
             print("Added to queue for assignment(s) {}".format(", ".join(str(s) for s in exercises)))
@@ -232,8 +232,13 @@ class QS:
     """
     Same as add person but it uses a personID instead of a name
     """
-    def add_person_id(self, subject, personID, roomID=6, desk=1, exercises=[3.141592653589793]):
-        self.add_to_queue_with_id(subject=subject, personID=personID, roomID=roomID, desk=desk, exercises=exercises)
+    def add_person_id(self, subject, personID, roomID=6, desk=1, exercises=[3.141592653589793], help=False, message=None, boost=False):
+        self.add_to_queue_with_id(subject=subject, personID=personID, roomID=roomID, desk=desk, exercises=exercises, help=help, message=message)
+
+        # If you want the person to boost to top (almost, it's 1 posision before first)
+        if boost:
+            self.boost(subject="meth", personID=6352)
+
         self.add_to_queue(subject=subject, roomID=roomID, desk=desk, exercises=exercises)
         self.remove_from_queue(subject=subject)
 
@@ -262,7 +267,6 @@ class QS:
 
         req = requests.post(self.addURL, data=json.dumps(payload), headers=self.headers)
         self.queueID = req.text.split(":")[-1][:-1]
-        print(self.queueID)
 
         if req.status_code == 200:
             print("Added to queue for assignment(s) {}".format(", ".join(str(s) for s in exercises)))
@@ -315,3 +319,24 @@ class QS:
         for people in queue:
             if personSubjectID in people["groupmembers"]:
                 return people["queueElementID"]
+
+
+    """
+    Method for boosting to the "top". It sends you to the posision before first.
+    """
+    def boost(self, subject, personID):
+        queueID = self.get_queueID(subject=subject, personSubjectID=personID)
+
+        payload = {
+            "queueElementPosition": 999,
+            "queueElementPositionNext": 1,
+            "queueElementID": queueID,
+            "subjectID": self.subjectIDs[subject]
+        }
+
+        req = requests.post(url=self.postponeURL, data=json.dumps(payload), headers=self.headers)
+
+        if req.status_code != 200:
+            print(req)
+            print(req.reason)
+            print(req.content)

@@ -18,5 +18,8 @@ Python (Prob with version >= 3)\
 Requests library (pip install requests)\
 Something that can run Python code.
 
-## QSApp (early)
-Simple GUI made in tkinter for easy interaction with QS. So far it can only choose a subject and load the queue into a listbox for a quick overview.
+## QSJoiner
+Command Line Interface for joining the QS queue. Has currently only 2 modes, namely adding and removing to/from queue. Has functionality for sending lots of requests to QS so that the user has good chances of getting first into the queue.
+
+## QSApp
+Simple GUI made in Tkinter for easy interaction with QS. It has the most important functionalities from QSFokker. It's badly made (huge messy code), but it works and does the job pretty nicely. Makes it very easy to show the queue and add/remove students to/from the queue.

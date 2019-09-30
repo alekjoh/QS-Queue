@@ -1,12 +1,13 @@
-from tkinter import Tk, Text, BOTH, W, N, E, S, OptionMenu, StringVar, Listbox, Checkbutton, IntVar
+# Tkinter imports.
+from tkinter import Tk, Text, BOTH, OptionMenu, StringVar, Listbox, Checkbutton, IntVar
 from tkinter.ttk import Frame, Button, Label, Style, Combobox
 
-from QSFokker import QS
-import random
-import time
-from threading import Thread
+from QSFokker import QS         # QS library which is needed for doing all the requests towards QS.
+import random                   # Just for trolling. It is only used for choosing random students to put in the queue.
+import time                     # Makes the thread sleep so we do not overload QS by accident.
+from threading import Thread    # Needed for spamming requests since without this the program will stop responding because of infinite while loop
 
-# Map because I have hardcoded these in QSFokker.... This needs to be fixed.
+# Map because I have hardcoded these in QSFokker.... This needs to be fixed someday (#Refactor is not fun).
 subjects = {
     "Machine Learning": "ml",
     "Math": "meth",
@@ -16,6 +17,9 @@ subjects = {
 
 class QSApp(Frame):
 
+    """
+    Constructor. It is also very messy. Lots of variables needed in the app.
+    """
     def __init__(self):
         super().__init__()
 
@@ -59,6 +63,11 @@ class QSApp(Frame):
         self.initUI()
 
 
+    """
+    An absolute pile of messy goo. It is very unstructured and bad, but at least it works. Method itself is used for
+    placing all the visible aspects on the screen. It is basically the essence of the GUI. The only thing it does not
+    display are the checkboxes over the different exercises since those are added via a method (set_exercises).
+    """
     def initUI(self):
 
         self.master.title("QS")
@@ -161,6 +170,11 @@ class QSApp(Frame):
         self.remove_student_button.grid(row=13, column=1, pady=(10, 0))
 
 
+    """
+    Method which runs every time you change the room you want to sign up with. The event passed in the method is not 
+    used, but the combobox gives an event so the method needs to have it. This method updates the desk combobox with
+    the correct desks, since different rooms have different amount of desks.
+    """
     def on_room_select(self, useless_event):
         room = self.rooms[self.room_list.current()]
 
@@ -169,6 +183,10 @@ class QSApp(Frame):
 
         self.desk_list["values"] = [i for i in range(1, desks + 1)]
 
+    """
+    Method for adding students with you in the queue. It checks if the person exists or not in the list from before and
+    if he/she/it does't, then the student is added in the list.
+    """
     def add_student(self, event=None):
         if self.current_student_to_add != None:
             if self.current_student_to_add not in self.students_to_add:
@@ -177,17 +195,28 @@ class QSApp(Frame):
         else:
             print("The student is none....")
 
+    """
+    Method for updating the listbox of students you want to add with you in the queue.
+    """
     def update_students_to_add(self):
         self.student_add_list.delete(0, "end")
         for stud in self.students_to_add:
             self.student_add_list.insert("end", " ".join([stud["personFirstName"], stud["personLastName"]]))
 
+    """
+    Method for removing students from the list of students you want to add with you into a queue. Basically, if you 
+    add someone by mistake, you need this method
+    """
     def remove_student(self, event=None):
         if self.current_student_to_remove != None:
             if self.current_student_to_remove in self.students_to_add:
                 self.students_to_add.remove(self.current_student_to_remove)
                 self.update_students_to_add()
 
+    """
+    Does what it says it does. It makes a popup window with a message. Usage is for telling the user when input is 
+    missing. Huge credit to Sentdex since that is where i "borrowed" this code.
+    """
     def popup(self, message):
         popup = Tk()
         popup.wm_title("!")
@@ -197,6 +226,9 @@ class QSApp(Frame):
         B1.pack()
         popup.mainloop()
 
+    """
+    Method for adding yourself w/o others. It has checks for desk and exercises and sends popups if you miss any of these.
+    """
     def add_to_queue(self):
         room = self.rooms[self.room_list.current()]
         room_id = room["roomID"]
@@ -204,10 +236,12 @@ class QSApp(Frame):
         desk = self.desk_list.get()
         if desk.strip() == "":
             self.popup("You must enter a desk!")
+            return
 
         exercises = self.get_selected_exercises()
         if len(exercises) <  1:
             self.popup("You must deliver at least 1 exercise!")
+            return
 
         exercises = [int(ex) for ex in exercises] # Because shit needs to be int (can be float too actually)
         subject = subjects[self.current_subject]
@@ -227,11 +261,20 @@ class QSApp(Frame):
         self.update_queue()
         self.exercises_var.set("Exercises chosen: (None)")
 
+    """
+    Method for canceling the spam_add method which is run by a thread.
+    """
     def cancel_queue(self):
         if self.request_thread != None:
             self.should_stop = True
 
 
+    """
+    Thread method. This is the method which continuously sends requests for joining the queue. A thread is created and
+    is told to run this method async so that the program does not suddenly "stops responding". It will continue to send
+    requests until it either gets into the queue or the user presses the cancel button. After every request the thread
+    will sleep a set of milliseconds before proceeding with the next attempt.
+    """
     def spam_add(self, room_id, desk, exercises, subject, students):
         status_code, reason, content = self.qs.add_to_queue(subject=subject, roomID=room_id, desk=desk, exercises=exercises, persons=students)
 
@@ -243,6 +286,10 @@ class QSApp(Frame):
 
         self.update_queue()
 
+    """
+    Method for setting the current_student_to_add variable. This is needed so that the add button knows which student 
+    to add. The last student selected will be added.
+    """
     def select_student_to_add(self, event):
         w = event.widget
 
@@ -252,6 +299,10 @@ class QSApp(Frame):
         except:
             pass
 
+    """
+    Method for setting the current_student_to_remove variable. This is needed so that the remove button knows which
+    student to remove. The last student which was selected will be removed.
+    """
     def select_student_to_remove(self, event):
         w = event.widget
 
@@ -342,10 +393,19 @@ class QSApp(Frame):
             self.set_queue(values)
             self.set_exercises()
 
+    """
+    Method for getting the number of total exercises in the current subject
+    """
     def get_number_of_subjects(self):
         info = self.qs.get_subject_info(subject=subjects[self.current_subject])
         return info[-1][0]["subjectExercises"]
 
+    """
+    Method for creating a list of checkboxes and a list with their boolean values (int is used here, but it is only 0 or 1).
+    It creates as many checkboxes as needed and puts them in an array. Then they are shown on screen. Btw i'm pretty 
+    sure the grid of checkboxes will look messed up if we get more than 25 exercises, since then there are more than 
+    5x5 = 25 exercises and they will start on a row not expected which will create huge gaps.
+    """
     def set_exercises(self):
         number_of_subjects = self.get_number_of_subjects()
 
@@ -364,9 +424,16 @@ class QSApp(Frame):
             column_number = i % self.columns + self.start_column
             self.checkboxes[i].grid(row=row_number, column=column_number)
 
+    """
+    Method for getting a list of the exercises which are chosen
+    """
     def get_selected_exercises(self):
         return [str(index + 1) for index, checkvalue in enumerate(self.checkvalues) if checkvalue.get() == 1]
 
+    """
+    Method which is called every time an exercise checkbox is ticked/unticked. The logic for updating the checkboxes are
+    handled elsewhere, this method only updates the label which states the exercises chosen.
+    """
     def on_check_box(self):
         exercises = self.get_selected_exercises()
         text = "Exercises chosen: ({})".format(", ".join(self.get_selected_exercises())) if len(exercises) != 0 else "Exercises chosen: (None)"

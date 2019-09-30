@@ -124,6 +124,7 @@ class QS:
         failed_to_add = []
 
         for person in persons:
+            print(person)
             result = self.find_person(person.split(" ")[0], person.split(" ")[-1], subject=subject)
 
 
@@ -233,9 +234,10 @@ class QS:
 
         req = requests.post(url=self.studentsURL, data=json.dumps(payload), headers=self.headers)
         if req.status_code == 200:
-            return req.json()
+            return req.status_code, req.reason, req.json()
 
-        return []
+        # If we did not get 200 as status code, meaning something went wrong
+        return req.status_code, req.reason, req.content
 
     """
     Method for finding a specific person from a specific subject. It calls upon the get_people() method which gets
@@ -246,7 +248,7 @@ class QS:
     """
 
     def find_person(self, firstname, lastname, subject):
-        for p in self.get_people(subject=subject):
+        for p in self.get_people(subject=subject)[-1]:
             if p["personFirstName"] == firstname and p["personLastName"] == lastname or p["personFirstName"].startswith(
                     firstname) and p["personLastName"].startswith(lastname):
                 return p

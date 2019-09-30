@@ -4,6 +4,7 @@ from tkinter.ttk import Frame, Button, Label, Style, Combobox
 from QSFokker import QS
 import random
 import time
+from threading import Thread
 
 # Map because I have hardcoded these in QSFokker.... This needs to be fixed.
 subjects = {
@@ -20,19 +21,16 @@ class QSApp(Frame):
 
         self.qs = QS()
         self.queue = []
-        result = self.qs.get_rooms()
-
-        if result[0] == 200: # Checks if we managed to get the rooms
-            self.rooms = result[-1] # Final element is the content
-        else:
-            raise Exception("Could not load rooms. #RIP") # Why not throw a good ol' error if we cannot find rooms?
 
         # Stored variables needed for queueing up.
         self.current_subject = None
         self.current_selected_student = None
         self.current_room = None
         self.current_desk = None
+        self.current_student_to_add = None
+
         self.students = []
+        self.students_to_add = []
 
         # Checkbox variables
         self.columns = 5 # Number of checkboxes per row when selecting exercises.
@@ -42,6 +40,21 @@ class QSApp(Frame):
         # List of checkboxes and their values.
         self.checkboxes = []
         self.checkvalues = []
+
+        self.request_thread = None
+        self.should_stop = False
+
+
+        # Load stuff
+
+        # Rooms
+        result = self.qs.get_rooms()
+
+        if result[0] == 200:  # Checks if we managed to get the rooms
+            self.rooms = result[-1]  # Final element is the content
+        else:
+            raise Exception("Could not load rooms. #RIP")  # Why not throw a good ol' error if we cannot find rooms?
+
 
         self.initUI()
 
@@ -64,7 +77,7 @@ class QSApp(Frame):
         self.columnconfigure(8, weight=2)
 
         self.subject_label = Label(self, text="Choose a subject")
-        self.subject_label.grid(row=0, column=0, padx=(20, 0), pady=(20, 0))
+        self.subject_label.grid(row=0, column=0, padx=(20, 0), pady=(20, 0), sticky="we")
 
         # Subject dropdown menu
         subjects_options = ["Machine Learning", "Security", "Math"]
@@ -99,13 +112,6 @@ class QSApp(Frame):
         self.delete_button = Button(self, text="Delete", command=self.delete_student)
         self.delete_button.grid(row=8, column=1, sticky="ew")
 
-        self.add_label_info = Label(self, text="Add yourself to the queue")
-        self.add_label_info.grid(row=0, column=2, padx=(40, 0), sticky="ew", columnspan=self.columns)
-
-
-        """
-        TODO: FIX this broken space between checkboxes. Have no idead who or what is cucking me so hard.
-        """
 
         self.exercises_var = StringVar(self)
         self.exercises_var.set("Exercises chosen: (None)")
@@ -114,18 +120,45 @@ class QSApp(Frame):
 
 
         self.room_label = Label(self, text="Room")
-        self.room_label.grid(row=8, column=2)
+        self.room_label.grid(row=8, column=2, columnspan=self.columns)
         self.room_list = Combobox(self, values=["{} ({})".format(room["roomName"], room["roomNumber"]) for room in self.rooms], width=44)
         self.room_list.bind("<<ComboboxSelected>>", self.on_room_select)
-        self.room_list.grid(row=9, column=2)
+        self.room_list.grid(row=9, column=2, columnspan=self.columns)
 
         self.desk_label = Label(self, text="Desk")
-        self.desk_label.grid(row=10, column=2, pady=(20, 0))
-        self.desk_list = Combobox(self, values=["Select a room fgt"])
-        self.desk_list.grid(row=11, column=2)
+        self.desk_label.grid(row=10, column=2, columnspan=self.columns)
+        self.desk_list = Combobox(self, values=["1"])
+        self.desk_list.grid(row=11, column=2, columnspan=self.columns, sticky="N")
 
         self.add_to_queue_button = Button(self, text="Add to queue", command=self.add_to_queue)
-        self.add_to_queue_button.grid(row=12, column=2, sticky="ew", pady=(20, 0))
+        self.add_to_queue_button.grid(row=13, column=2, sticky="ew", pady=(20, 0), columnspan=self.columns)
+
+        self.cancel_button = Button(self, text="Cancel", command=self.cancel_queue)
+        self.cancel_button.grid(row=14, column=2, sticky="ew", pady=(5, 0), columnspan=self.columns)
+
+
+        # Adding students list
+        self.student_list = Listbox(self)
+        self.student_list.bind("<<ListboxSelect>>", func=self.select_student_to_add)
+        self.student_list.bind("<Double-Button-1>", func=self.add_student)
+        self.student_list.config(width=40)
+        self.student_list.grid(row=12, column=0, padx=(20, 0))
+
+        self.update_students()
+
+
+        self.student_add_list = Listbox(self)
+        self.student_add_list.bind("<<ListboxSelect>>", func=self.select_student_to_remove)
+        self.student_add_list.bind("<Double-Button-1>", func=self.remove_student)
+        self.student_add_list.config(width=40)
+        self.student_add_list.grid(row=12, column=1)
+
+
+        self.add_student_button = Button(self, text="Add", command=self.add_student)
+        self.add_student_button.grid(row=13, column=0, pady=(10, 0))
+
+        self.remove_student_button = Button(self, text="Remove", command=self.remove_student)
+        self.remove_student_button.grid(row=13, column=1, pady=(10, 0))
 
 
     def on_room_select(self, useless_event):
@@ -135,6 +168,25 @@ class QSApp(Frame):
         self.desk_list.delete(0, "end")
 
         self.desk_list["values"] = [i for i in range(1, desks + 1)]
+
+    def add_student(self, event=None):
+        if self.current_student_to_add != None:
+            if self.current_student_to_add not in self.students_to_add:
+                self.students_to_add.append(self.current_student_to_add)
+                self.update_students_to_add()
+        else:
+            print("The student is none....")
+
+    def update_students_to_add(self):
+        self.student_add_list.delete(0, "end")
+        for stud in self.students_to_add:
+            self.student_add_list.insert("end", " ".join([stud["personFirstName"], stud["personLastName"]]))
+
+    def remove_student(self, event=None):
+        if self.current_student_to_remove != None:
+            if self.current_student_to_remove in self.students_to_add:
+                self.students_to_add.remove(self.current_student_to_remove)
+                self.update_students_to_add()
 
     def popup(self, message):
         popup = Tk()
@@ -150,6 +202,8 @@ class QSApp(Frame):
         room_id = room["roomID"]
 
         desk = self.desk_list.get()
+        if desk.strip() == "":
+            self.popup("You must enter a desk!")
 
         exercises = self.get_selected_exercises()
         if len(exercises) <  1:
@@ -158,16 +212,55 @@ class QSApp(Frame):
         exercises = [int(ex) for ex in exercises] # Because shit needs to be int (can be float too actually)
         subject = subjects[self.current_subject]
 
-        status_code, reason, content = self.qs.add_to_queue(subject=subject, roomID=room_id, desk=desk, exercises=exercises)
+        students = self.students_to_add
+        if len(students) == 0:
+            students = None
+        else:
+            students = [" ".join([stud["personFirstName"], stud["personLastName"]]) for stud in students]
 
-        while status_code != 200:
-            status_code, reason, content = self.qs.add_to_queue(subject=subject, roomID=room_id, desk=desk, exercises=exercises)
+
+
+        self.should_stop = False  # Needed so the thread knows that it needs to keep going or until we manually stop it.
+        self.request_thread = Thread(target=self.spam_add, args=(room_id, desk, exercises, subject, students))
+        self.request_thread.start()
+
+        self.update_queue()
+        self.exercises_var.set("Exercises chosen: (None)")
+
+    def cancel_queue(self):
+        if self.request_thread != None:
+            self.should_stop = True
+
+
+    def spam_add(self, room_id, desk, exercises, subject, students):
+        status_code, reason, content = self.qs.add_to_queue(subject=subject, roomID=room_id, desk=desk, exercises=exercises, persons=students)
+
+        while status_code != 200 and not self.should_stop:
+            status_code, reason, content = self.qs.add_to_queue(subject=subject, roomID=room_id, desk=desk,
+                                                                exercises=exercises, persons=students)
+            print(status_code)
             time.sleep(0.2)
 
         self.update_queue()
 
-    def test(self):
-        print("Exercises selected:", self.get_selected_exercises())
+    def select_student_to_add(self, event):
+        w = event.widget
+
+        try:
+            index = int(w.curselection()[0])
+            self.current_student_to_add = self.students[index]
+        except:
+            pass
+
+    def select_student_to_remove(self, event):
+        w = event.widget
+
+        try:
+            index = int(w.curselection()[0])
+            self.current_student_to_remove = self.students_to_add[index]
+        except:
+            pass
+
 
     """
     Method for updating info about the current selected student in queue.
@@ -212,7 +305,12 @@ class QSApp(Frame):
         self.current_subject = subject
         self.queue = self.qs.get_queue(subject=subjects[subject])
 
+        self.students_to_add = []
+        self.current_student_to_add = None
+        self.current_student_to_remove = None
         self.update_queue()
+        self.update_students()
+        self.update_students_to_add()
 
     """
     Method for deleting a student. Because this cannot be abused what so ever. This method is run every time the delete
@@ -274,17 +372,31 @@ class QSApp(Frame):
         text = "Exercises chosen: ({})".format(", ".join(self.get_selected_exercises())) if len(exercises) != 0 else "Exercises chosen: (None)"
         self.exercises_var.set(text)
 
+    """
+    Method for updating the listbox containing the students you want to add with you in the queue.
+    """
+    def update_students(self):
+        result = self.qs.get_people(subjects[self.current_subject])
+        if result[0] == 200:
+            self.students = result[-1]
+            self.set_students_to_add([" ".join([stud["personFirstName"], stud["personLastName"]]) for stud in self.students])
+        else:
+            raise Exception("Could not get students because: {} ({})\nContent: {}".format(result[0], result[1], result[2]))
+
+    """
+    Method for setting the values in students_to_add listbox
+    """
+    def set_students_to_add(self, student_names):
+        self.student_list.delete(0, "end")
+        for name in student_names:
+            self.student_list.insert("end", name)
+
 
 def main():
-    # qs = QS()
-    # info = qs.get_subject_info("meth")
-    # print(info[-1][0]["subjectExercises"])
-
     root = Tk()
-    root.geometry("800x600")
+    root.geometry("800x650")
     app = QSApp()
     root.mainloop()
-
 
 if __name__ == '__main__':
     main()

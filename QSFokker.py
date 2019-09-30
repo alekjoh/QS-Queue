@@ -42,6 +42,7 @@ class QS:
         self.buildingURL = "https://qs.stud.iie.ntnu.no/res/building"  # Most useless link, it is never used anywhere.
         self.studentsURL = "https://qs.stud.iie.ntnu.no/res/studentsInSubject"
         self.postponeURL = "https://qs.stud.iie.ntnu.no/res/studentPostponeQueueElement"
+        self.subject_specificURL = "https://qs.stud.iie.ntnu.no/res/regSubjectSpecific"
 
         self.subjectIDs = {
             "meth": 128,
@@ -193,6 +194,30 @@ class QS:
         return req.status_code
 
     """
+    Same as removing from queue, but this one removes based on queueID instead of personID.
+    """
+    def remove_from_queue_by_id(self, subject, queueID):
+        subjectID = self.subjectIDs[subject]
+
+        if subjectID == None:
+            print("Cannot remove from invalid subject!")
+            return
+
+        payload = {
+            "queueElementID": queueID,
+            "subjectID": subjectID
+        }
+
+        req = requests.post(url=self.removeURL, data=json.dumps(payload), headers=self.headers)
+
+        if req.status_code != 200:
+            print("Could not remove from queue, rip...")
+            print("{}: {}".format(req.status_code, req.reason))
+            print(req.content)
+
+        return req.status_code
+
+    """
     Method for getting all the students from a certain subject. It accepts either a subject name or subjectID
     (must be at least one). If both are provided the subjectID will take priority. This will return a list of 
     all students from that subject which are NOT currently in the queue. Which means that if all students are in the
@@ -236,8 +261,8 @@ class QS:
     """
     Method for adding a person to the queue alone. It basically exploits the fact that if you add yourself to the queue
     with somebody, then add yourself to the queue alone, it will create two entries in the queue. 1 with the group you
-    added all alone and yourself. So if you remove yourself after adding yourself twice, the group will be left behind
-    in the queue, effectively adding only them to the queue.
+    added all alone and 1 with just yourself. So if you remove yourself after adding yourself twice, the group will be 
+    left behind in the queue, effectively adding only them to the queue.
     """
 
     def add_person(self, firstname, lastname, subject, roomID=6, desk=1, exercises=[3.141592653589793]):
@@ -257,13 +282,14 @@ class QS:
 
         # If you want the person to boost to top (almost, it's 1 posision before first)
         if boost:
-            self.boost(subject="meth", personID=6352)
+            self.boost(subject="meth", personID=personID)
 
         self.add_to_queue(subject=subject, roomID=roomID, desk=desk, exercises=exercises)
         self.remove_from_queue(subject=subject)
 
     """
-    Method for adding every single student in a subject that are not currently in the queue.
+    Method for adding every single student in a subject that are not currently in the queue. This is not broken at all
+    and should actually be a feature on their website.
     """
 
     def add_all(self, subject, roomID=6, desk=1, exercices=[3.141592653589793]):
@@ -296,7 +322,6 @@ class QS:
         else:
             print("Error. We got status code: {}".format(req.status_code))
             print("Content: {}".format(req.content))
-            exit(1)
 
         add_person_payload = {
             "exercises": exercises,
@@ -311,7 +336,8 @@ class QS:
             print(req.status_code)
             print(req.reason)
             print(req.content)
-            exit(1)
+
+        return req.status_code, req.reason, req.content
 
     """
     Method for getting the current queue for a specific subject. It's only argument is the subject name. It will request
@@ -365,3 +391,35 @@ class QS:
             print(req)
             print(req.reason)
             print(req.content)
+
+    """
+    Method for getting information about a specific subject. Used for the QSApp
+    """
+    def get_subject_info(self, subject):
+        subjectID = self.subjectIDs[subject]
+
+        if subjectID == None:
+            print("Invalid subject")
+            return
+
+        payload = {
+            "subjectID": subjectID
+        }
+
+        req = requests.post(url=self.subject_specificURL, data=json.dumps(payload), headers=self.headers)
+
+        if req.status_code != 200:
+            return req.status_code, req.reason, req.content
+        else:
+            return req.status_code, req.reason, req.json()
+
+    """
+    Method for getting information about the different rooms.
+    """
+    def get_rooms(self):
+        req = requests.get(url=self.roomURL, headers=self.headers)
+
+        if req.status_code != 200:
+            return req.status_code, req.reason, req.content
+        else:
+            return req.status_code, req.reason, req.json()

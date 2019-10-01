@@ -1,11 +1,12 @@
 import argparse
 from QSFokker import QS
+import time
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument("-m", "--mode", type=str, help="Specifies the mode (e.g join, remove, delay etc)", required=True)
 parser.add_argument("-s", "--subject", type=str, help="Subject name. E.g. meth, ml, sik etc")
 parser.add_argument("-e", "--exercises", type=int, nargs="+", help="Exercise numbers to add to the queue. For example assignment 1 and 2 would look like: -e 1 2")
-parser.add_argument("-a", "--students", type=str, nargs="+", help="Students. This will be a list of names who will be added to the queue with you")
+parser.add_argument("-add", "--students", type=str, nargs="+", help="Students. This will be a list of names who will be added to the queue with you")
 parser.add_argument("-d", "--desk", type=int, help="Number of the desk")
 parser.add_argument("-r", "--room", type=str, help="Room number (e.g 404, 403, lab etc)")
 parser.add_argument("-mes", "--message", type=str, help="Message for the teacher/assistant")
@@ -24,8 +25,8 @@ help = args.enable_help
 
 # Map of all the rooms. Room nickname is the key and the value is the room number it has in the qs system
 rooms = {
-    404: 43,
-    403: 42,
+    "404": 43,
+    "403": 42,
     "lab": 6
 }
 
@@ -36,14 +37,19 @@ subjectPersonIDs = {
     "sik": 9573
 }
 
-qs = QS()
+my_token = "" # Put your token here
+qs = QS(token=my_token)
 
 if mode == "add":
     if subject == None or exercises == None or room == None or desk == None:
         print("To add people you need to fill in subject exercises, room and desk")
         exit(1)
 
-    qs.add_to_queue(subject=subject, roomID=rooms[room], desk=desk, message=message, help=help, exercises=exercises, persons=students)
+    code = 401
+    while code != 200:
+        code, reason, content = qs.add_to_queue(subject=subject, roomID=rooms[room], desk=desk, message=message, help=help, exercises=exercises, persons=students)
+        print(code)
+        time.sleep(0)
 
 elif mode == "rem":
     if subject == None:

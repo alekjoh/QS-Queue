@@ -70,18 +70,6 @@ class QS:
     Method for adding yourself (and evt other students). It takes in the subject name, which is the name of the subject.
     This name is then checked in the dictionary up in the class attributes. This means the user is responsible for 
     adding the correct subjects to the dictionary for this to work. By default I have added my own subjects.
-<<<<<<< HEAD
-    The roomID is the id of the id of the room you're in (duh). To find these id's you can do a post towards the 
-    room url provided in the URL section above (self.roomURL). By doing this you can get a list of all the rooms and
-    their corresponding ids. For my usage I only need 3 of them (404 = 43, 403 = 42 and the lab = 6).
-    The desk is just the desk number. For small classrooms it is typically just the number 1, but in bigger rooms 
-    (like the lab) there are several desks, so this argument is just a number between 1-n where n is the number of 
-    desks in the room
-    The message is just a string with a message to the teacher/assistent for additional information
-    The help is just a boolean value which tells the teacher/assistant whether you need help or not
-    The exercises is a list of the assignments you want to have reviewed. Must be numbers as anything else will be 
-    displayed as NaN (Not a Number) in the QS queue system.
-=======
 
     The roomID is the id of the id of the room you're in (duh). To find these id's you can do a post towards the 
     room url provided in the URL section above (self.roomURL). By doing this you can get a list of all the rooms and
@@ -98,7 +86,6 @@ class QS:
     The exercises is a list of the assignments you want to have reviewed. Must be numbers as anything else will be 
     displayed as NaN (Not a Number) in the QS queue system.
 
->>>>>>> c0411059a613ad235c2bb7c63e9854b895ce5c36
     Finally the persons argument is just a list of names. This would be the names of the students you want to join your
     queue. Example would be add_to_queue(persons=["Bob Bobsen", "Boy Boysen"]). This would then add yourself to the
     queue and then later add these 2. If any of these students do not exist or are already in the queue, the program will
@@ -168,10 +155,6 @@ class QS:
 
     """
     NOTE:
-<<<<<<< HEAD
-=======
-
->>>>>>> c0411059a613ad235c2bb7c63e9854b895ce5c36
     This method is kind of useless since there really is no need for having a script for removing yourself from the queue.
     Also this method requires a queueElementPosition and QueueID which is RIP to find if you have not run add_to_queue()
     before this method since the program wont know what that ID would be and you'd have to find out manually which

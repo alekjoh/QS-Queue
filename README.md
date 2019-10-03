@@ -26,5 +26,5 @@ Simple GUI made in Tkinter for easy interaction with QS. It has the most importa
 This program is not finished yet and needs to be polished. It works, but it has some flaws when it comes to updating data like the queue, people you wanted to add etc.
 
 ## Config
-For this program to work, you must add in data in the config files. This would include your token and other data. Example is shown in the image below.
+For this program to work, you must add in data in the config files. This would include your token and other data. Example is shown in the image below.\
 ![alt text](https://i.ibb.co/zRYR3mV/Delete-This.jpg)

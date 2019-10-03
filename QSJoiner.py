@@ -1,6 +1,7 @@
 import argparse
 from QSFokker import QS
 import time
+import config
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument("-m", "--mode", type=str, help="Specifies the mode (e.g join, remove, delay etc)", required=True)
@@ -24,20 +25,11 @@ message = args.message
 help = args.enable_help
 
 # Map of all the rooms. Room nickname is the key and the value is the room number it has in the qs system
-rooms = {
-    "404": 43,
-    "403": 42,
-    "lab": 6
-}
+rooms = config.rooms
 
-# Map of all my IDs in different subjects. I dont even know if I need these....
-subjectPersonIDs = {
-    "meth": 9411,
-    "ml": 9634,
-    "sik": 9573
-}
+subject_codes = config.subject_names_shortened
 
-my_token = "" # Put your token here
+my_token = config.token
 qs = QS(token=my_token)
 
 if mode == "add":
@@ -45,10 +37,17 @@ if mode == "add":
         print("To add people you need to fill in subject exercises, room and desk")
         exit(1)
 
+    subject_id = subject_codes[subject]
+    if subject_id == None:
+        print("Input a valid subject. (You either spelled it wrong or you have not added the subject code to your config")
+        exit(1)
+
+    room = rooms[room]
+
     code = 401
     while code != 200:
-        code, reason, content = qs.add_to_queue(subject=subject, roomID=rooms[room], desk=desk, message=message, help=help, exercises=exercises, persons=students)
-        print(code)
+        code, reason, content = qs.add_to_queue(subject_id=subject_id, room_id=room, desk=desk, message=message, help=help, exercises=exercises, persons=students)
+        print(code, reason, content)
         time.sleep(0)
 
 elif mode == "rem":
@@ -56,4 +55,10 @@ elif mode == "rem":
         print("To remove yourself from a queue, you must specify the subject!")
         exit(1)
 
-    qs.remove_from_queue(subject=subject)
+    subject_id = subject_codes[subject]
+
+    if subject_id == None:
+        print("Input a valid subject. (You either spelled it wrong or you have not added the subject code to your config")
+        exit(1)
+
+    qs.remove_from_queue(subject_id=subject_id)

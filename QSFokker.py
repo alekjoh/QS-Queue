@@ -28,7 +28,7 @@ text = """Sec-Fetch-Mode:cors
 
 class QS:
     def __init__(self, token):
-        # This is the token that is needed for doing requests (authentication). By default it is my own cause I don't care if my cookies are on the interwebz, mkay?
+        # This is the token that is needed for doing requests (authentication).
         self.token = token
 
         # URLS
@@ -43,14 +43,14 @@ class QS:
         self.postponeURL = "https://qs.stud.iie.ntnu.no/res/studentPostponeQueueElement"
         self.subject_specificURL = "https://qs.stud.iie.ntnu.no/res/regSubjectSpecific"
 
-        self.subjectIDs = {
-            "meth": 128,
-            "ml": 131,
-            "sik": 130
-        }
+        # self.subjectIDs = {
+        #     "meth": 128,
+        #     "ml": 131,
+        #     "sik": 130
+        # }
 
         # Id which is needed for removing yourself from the queue....
-        self.personID = 6352
+        self.person_id = 6352
 
         """
         If you want to ban someone for lyf so that they cannot enter the queue, just set self.personID to the personID
@@ -59,8 +59,6 @@ class QS:
         a nice and secure system that it lets you remove other people for them in case they don't know how to do it 
         themselves...??? Don't question it, it is perfectly balanced as all things should be!
         """
-
-        # self.personID = 6395
 
         # Inserts token into headers and makes a dict to feed the request library
         header_lines = text.format(token).split("\n")
@@ -95,11 +93,15 @@ class QS:
     response.
     """
 
-    def add_to_queue(self, subject, roomID, desk, message=None, help=False, exercises=[8], persons=None):
+    def add_to_queue(self, subject_id, room_id, desk, message=None, help=False, exercises=[8], persons=None):
+
+        # Need to check like this since isinstance() method cannot differentiate between int and bool.
+        if not type(subject_id) == int:
+            return 999, "Invalid subject type, must be int", "yeet"
 
         payload = {
-            "subjectID": self.subjectIDs[subject],
-            "roomID": roomID,
+            "subjectID": subject_id,
+            "roomID": room_id,
             "desk": desk,
             "message": message,
             "help": help,
@@ -107,15 +109,13 @@ class QS:
         }
 
         req = requests.post(self.addURL, data=json.dumps(payload), headers=self.headers)
-        self.queueID = req.text.split(":")[-1][:-1]
+        self.queue_id = req.text.split(":")[-1][:-1]
 
         status_code = req.status_code
 
         if req.status_code == 200:
             print("Added to queue for assignment(s) {}".format(", ".join(str(s) for s in exercises)))
         else:
-           # print("Error. We got status code: {}".format(req.status_code))
-           # print("Content: {}".format(req.content))
             return status_code, req.reason, req.content
 
         if persons == None: return status_code, req.reason, req.content
@@ -123,8 +123,7 @@ class QS:
         failed_to_add = []
 
         for person in persons:
-            print(person)
-            result = self.find_person(person.split(" ")[0], person.split(" ")[-1], subject=subject)
+            result = self.find_person_by_name(person.split(" ")[0], person.split(" ")[-1], subject_id=subject_id)
 
 
             # If it is none the person never existed or the person is already in the queue so we should just skip this person
@@ -132,12 +131,12 @@ class QS:
                 failed_to_add.append(person)
                 continue
 
-            personID = result["subjectPersonID"]
+            person_id = result["subjectPersonID"]
 
             add_person_payload = {
                 "exercises": exercises,
-                "queueElementID": self.queueID,
-                "subjectPersonID": personID
+                "queueElementID": self.queue_id,
+                "subjectPersonID": person_id
             }
 
             req = requests.post(url=self.add_personURL, data=json.dumps(add_person_payload), headers=self.headers)
@@ -162,25 +161,23 @@ class QS:
     it is a pretty useless method
     """
 
-    def remove_from_queue(self, subject, personID=None):
-        if personID == None:
-            personID = self.personID
+    def remove_from_queue(self, subject_id, person_id=None):
+        if person_id == None:
+            person_id = self.person_id
 
-        queueID = self.get_queueID(subject=subject, personSubjectID=personID)
+        queue_id = self.get_queueID(subject_id=subject_id, person_subject_id=person_id)
 
-        if queueID == None:
+        if queue_id == None:
             print("You are already out of the queue!")
             return
 
-        subjectID = self.subjectIDs[subject]
-
-        if subjectID == None:
+        if subject_id == None:
             print("Cannot remove from invalid subject!")
             return
 
         payload = {
-            "queueElementID": queueID,
-            "subjectID": subjectID
+            "queueElementID": queue_id,
+            "subjectID": subject_id
         }
 
         req = requests.post(url=self.removeURL, data=json.dumps(payload), headers=self.headers)
@@ -195,16 +192,14 @@ class QS:
     """
     Same as removing from queue, but this one removes based on queueID instead of personID.
     """
-    def remove_from_queue_by_id(self, subject, queueID):
-        subjectID = self.subjectIDs[subject]
-
-        if subjectID == None:
+    def remove_from_queue_by_id(self, subject_id, queue_id):
+        if not type(subject_id) == int:
             print("Cannot remove from invalid subject!")
             return
 
         payload = {
-            "queueElementID": queueID,
-            "subjectID": subjectID
+            "queueElementID": queue_id,
+            "subjectID": subject_id
         }
 
         req = requests.post(url=self.removeURL, data=json.dumps(payload), headers=self.headers)
@@ -223,12 +218,13 @@ class QS:
     queue simultaneously this method will give you an empty list.
     """
 
-    def get_people(self, subject=None, subjectID=None):
-        # If you don't give anything then pls gtfo.
-        if subjectID == None and subject == None:
-            return None
+    def get_people(self, subject_id):
+        if not type(subject_id) == int:
+            return 999, "Subject ID needs to be an int", "Yeet"
 
-        payload = {"subjectID": subjectID} if subjectID != None else {"subjectID": self.subjectIDs[subject]}
+        payload = {
+            "subjectID": subject_id
+        }
 
         req = requests.post(url=self.studentsURL, data=json.dumps(payload), headers=self.headers)
         if req.status_code == 200:
@@ -241,22 +237,21 @@ class QS:
     Method for finding a specific person from a specific subject. It calls upon the get_people() method which gets
     all students currently not in a queue (for that subject) and finds the first person with matching firstname and
     lastname. Note that this method will also check if the student's name starts with the input given.
-    Example: Aleksander Johansen would be found with the given input: find_person("Aleks", "Joh", "meth")
+    Example: Aleksander Johansen would be found with the given input: find_person_by_name("Aleks", "Joh", 128)
     If the person you are searching for does not exist or is already in the queue, this method will return None.
     """
 
-    def find_person(self, firstname, lastname, subject):
-        for p in self.get_people(subject=subject)[-1]:
-            if p["personFirstName"] == firstname and p["personLastName"] == lastname or p["personFirstName"].startswith(
-                    firstname) and p["personLastName"].startswith(lastname):
+    def find_person_by_name(self, firstname, lastname, subject_id):
+        for p in self.get_people(subject_id=subject_id)[-1]:
+            if p["personFirstName"] == firstname and p["personLastName"] == lastname or p["personFirstName"].startswith(firstname) and p["personLastName"].startswith(lastname):
                 return p
 
     """
     Method for getting the subjectPersonID based on a firstname, lastname and a subject.
     """
 
-    def get_person_ID(self, firstname, lastname, subject):
-        return self.find_person(firstname, lastname, subject=subject)["subjectPersonID"]
+    def get_person_ID(self, firstname, lastname, subject_id):
+        return self.find_person_by_name(firstname, lastname, subject_id=subject_id)["subjectPersonID"]
 
     """
     Method for adding a person to the queue alone. It basically exploits the fact that if you add yourself to the queue
@@ -265,38 +260,38 @@ class QS:
     left behind in the queue, effectively adding only them to the queue.
     """
 
-    def add_person(self, firstname, lastname, subject, roomID=6, desk=1, exercises=[3.141592653589793]):
-        self.add_to_queue(subject=subject, roomID=roomID, desk=desk, exercises=exercises,
+    def add_person(self, firstname, lastname, subject_id, room_id=6, desk=1, exercises=[3.141592653589793]):
+        self.add_to_queue(subject_id=subject_id, room_id=room_id, desk=desk, exercises=exercises,
                           persons=[" ".join([firstname, lastname])])
-        self.add_to_queue(subject=subject, roomID=roomID, desk=desk, exercises=exercises)
-        self.remove_from_queue(subject=subject)
+        self.add_to_queue(subject_id=subject_id, room_id=room_id, desk=desk, exercises=exercises)
+        self.remove_from_queue(subject_id=subject_id)
 
     """
     Same as add person but it uses a personID instead of a name
     """
 
-    def add_person_id(self, subject, personID, roomID=6, desk=1, exercises=[3.141592653589793], help=False,
+    def add_person_id(self, subject_id, person_id, room_id=6, desk=1, exercises=[3.141592653589793], help=False,
                       message=None, boost=False):
-        self.add_to_queue_with_id(subject=subject, personID=personID, roomID=roomID, desk=desk, exercises=exercises,
+        self.add_to_queue_with_id(subject_id=subject_id, person_id=person_id, room_id=room_id, desk=desk, exercises=exercises,
                                   help=help, message=message)
 
         # If you want the person to boost to top (almost, it's 1 posision before first)
         if boost:
-            self.boost(subject="meth", personID=personID)
+            self.boost(subject_id=subject_id, person_id=person_id)
 
-        self.add_to_queue(subject=subject, roomID=roomID, desk=desk, exercises=exercises)
-        self.remove_from_queue(subject=subject)
+        self.add_to_queue(subject_id=subject_id, room_id=room_id, desk=desk, exercises=exercises)
+        self.remove_from_queue(subject_id=subject_id)
 
     """
     Method for adding every single student in a subject that are not currently in the queue. This is not broken at all
     and should actually be a feature on their website.
     """
 
-    def add_all(self, subject, roomID=6, desk=1, exercices=[3.141592653589793]):
-        people_not_in_queue = self.get_people(subject=subject)
+    def add_all(self, subject_id, room_id=6, desk=1, exercices=[3.141592653589793]):
+        people_not_in_queue = self.get_people(subject_id=subject_id)
 
         for people in people_not_in_queue:
-            self.add_person_id(subject=subject, personID=people["subjectPersonID"], roomID=roomID, desk=desk,
+            self.add_person_id(subject_id=subject_id, person_id=people["subjectPersonID"], room_id=room_id, desk=desk,
                                exercises=exercices)
 
     """
@@ -304,10 +299,10 @@ class QS:
     lots of random people.
     """
 
-    def add_to_queue_with_id(self, subject, personID, roomID, desk, exercises, message=None, help=False):
+    def add_to_queue_with_id(self, subject_id, person_id, room_id, desk, exercises, message=None, help=False):
         payload = {
-            "subjectID": self.subjectIDs[subject],
-            "roomID": roomID,
+            "subjectID": subject_id,
+            "roomID": room_id,
             "desk": desk,
             "message": message,
             "help": help,
@@ -315,7 +310,7 @@ class QS:
         }
 
         req = requests.post(self.addURL, data=json.dumps(payload), headers=self.headers)
-        self.queueID = req.text.split(":")[-1][:-1]
+        self.queue_id = req.text.split(":")[-1][:-1]
 
         if req.status_code == 200:
             print("Added to queue for assignment(s) {}".format(", ".join(str(s) for s in exercises)))
@@ -325,8 +320,8 @@ class QS:
 
         add_person_payload = {
             "exercises": exercises,
-            "queueElementID": self.queueID,
-            "subjectPersonID": personID
+            "queueElementID": self.queue_id,
+            "subjectPersonID": person_id
         }
 
         req = requests.post(url=self.add_personURL, data=json.dumps(add_person_payload), headers=self.headers)
@@ -345,15 +340,17 @@ class QS:
     return None
     """
 
-    def get_queue(self, subject):
+    def get_queue(self, subject_id):
         payload = {
-            "subjectID": self.subjectIDs[subject]
+            "subjectID": subject_id
         }
 
         req = requests.post(url=self.getQueueURL, data=json.dumps(payload), headers=self.headers)
 
         if req.status_code == 200:
-            return req.json()
+            return req.status_code, req.reason, req.json()
+
+        return req.status_code, req.reason, req.content
 
     """
     Method for getting the queueID of a person in a subject. This method is basically a helper method for the 
@@ -361,57 +358,73 @@ class QS:
     the subject and the personSubjectID.
     """
 
-    def get_queueID(self, subject, personSubjectID):
-        queue = self.get_queue(subject=subject)
+    def get_queueID(self, subject_id, person_subject_id):
+        status_code, reason, content = self.get_queue(subject_id=subject_id)
 
-        if isinstance(personSubjectID, int):
-            personSubjectID = str(personSubjectID)
+        # If we could not get the queue, then return -1 for queueID.
+        if status_code != 200:
+            return -1
+
+        queue = content
+
+        if isinstance(person_subject_id, int):
+            person_subject_id = str(person_subject_id)
 
         for people in queue:
-            if personSubjectID in people["groupmembers"]:
+            if person_subject_id in people["groupmembers"]:
                 return people["queueElementID"]
 
     """
     Method for boosting to the "top". It sends you to the posision before first.
     """
 
-    def boost(self, subject, personID):
-        queueID = self.get_queueID(subject=subject, personSubjectID=personID)
+    def boost_self(self, subject_id, person_id):
+        queue_id = self.get_queueID(subject_id=subject_id, person_subject_id=person_id)
 
         payload = {
             "queueElementPosition": 999,
             "queueElementPositionNext": 1,
-            "queueElementID": queueID,
-            "subjectID": self.subjectIDs[subject]
+            "queueElementID": queue_id,
+            "subjectID": subject_id
         }
 
         req = requests.post(url=self.postponeURL, data=json.dumps(payload), headers=self.headers)
 
-        if req.status_code != 200:
-            print(req)
-            print(req.reason)
-            print(req.content)
+        return req.status_code, req.reason, req.content
+
+    """
+    Same as boost_self, but it can boost anyone in the queue.
+    """
+    def boost(self, subject_id, queue_id, queue_position, steps=1):
+        payload = {
+            "queueElementPosition": queue_position,
+            "queueElementPositionNext": queue_position - steps,
+            "queueElementID": queue_id,
+            "subjectID": subject_id
+        }
+
+        req = requests.post(url=self.postponeURL, data=json.dumps(payload), headers=self.headers)
+
+        return req.status_code, req.reason, req.content
 
     """
     Method for getting information about a specific subject. Used for the QSApp
     """
-    def get_subject_info(self, subject):
-        subjectID = self.subjectIDs[subject]
-
-        if subjectID == None:
+    def get_subject_info(self, subject_id):
+        if not type(subject_id) == int:
             print("Invalid subject")
             return
 
         payload = {
-            "subjectID": subjectID
+            "subjectID": subject_id
         }
 
         req = requests.post(url=self.subject_specificURL, data=json.dumps(payload), headers=self.headers)
 
         if req.status_code != 200:
             return req.status_code, req.reason, req.content
-        else:
-            return req.status_code, req.reason, req.json()
+
+        return req.status_code, req.reason, req.json()
 
     """
     Method for getting information about the different rooms.

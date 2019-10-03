@@ -6,13 +6,10 @@ from QSFokker import QS         # QS library which is needed for doing all the r
 import random                   # Just for trolling. It is only used for choosing random students to put in the queue.
 import time                     # Makes the thread sleep so we do not overload QS by accident.
 from threading import Thread    # Needed for spamming requests since without this the program will stop responding because of infinite while loop
+import config
 
-# Map because I have hardcoded these in QSFokker.... This needs to be fixed someday (#Refactor is not fun).
-subjects = {
-    "Machine Learning": "ml",
-    "Math": "meth",
-    "Security": "sik"
-}
+
+subjects_to_id = config.subject_codes
 
 
 class QSApp(Frame):
@@ -23,8 +20,7 @@ class QSApp(Frame):
     def __init__(self):
         super().__init__()
 
-        token = "" # Your token goes here!
-        self.qs = QS(token=token)
+        self.qs = QS(token=config.token)
         self.queue = []
 
         # Stored variables needed for queueing up.
@@ -90,8 +86,11 @@ class QSApp(Frame):
         self.subject_label.grid(row=0, column=0, padx=(20, 0), pady=(20, 0), sticky="we")
 
         # Subject dropdown menu
-        subjects_options = ["Machine Learning", "Security", "Math"]
+        subjects_options = [key for key in subjects_to_id]
         self.current_subject = subjects_options[0]
+
+        self.poll_thread = Thread(target=self.poll_queue, args=())
+        self.poll_thread.start()
 
         # Value used in the dropdown
         self.var = StringVar(self)
@@ -121,6 +120,12 @@ class QSApp(Frame):
 
         self.delete_button = Button(self, text="Delete", command=self.delete_student)
         self.delete_button.grid(row=8, column=1, sticky="ew")
+
+        self.boost_button = Button(self, text="Boost", command=self.boost_student)
+        self.boost_button.grid(row=9, column=0, sticky="ew", padx=(20, 0))
+
+        self.derank_button = Button(self, text="Derank", command=self.derank_student)
+        self.derank_button.grid(row=9, column=1, sticky="ew")
 
 
         self.exercises_var = StringVar(self)
@@ -169,6 +174,8 @@ class QSApp(Frame):
 
         self.remove_student_button = Button(self, text="Remove", command=self.remove_student)
         self.remove_student_button.grid(row=13, column=1, pady=(10, 0))
+
+        self.on_subject_change(subject=self.current_subject)
 
 
     """
@@ -245,7 +252,7 @@ class QSApp(Frame):
             return
 
         exercises = [int(ex) for ex in exercises] # Because shit needs to be int (can be float too actually)
-        subject = subjects[self.current_subject]
+        subject_id = subjects_to_id[self.current_subject]
 
         students = self.students_to_add
         if len(students) == 0:
@@ -256,36 +263,19 @@ class QSApp(Frame):
 
 
         self.should_stop = False  # Needed so the thread knows that it needs to keep going or until we manually stop it.
-        self.request_thread = Thread(target=self.spam_add, args=(room_id, desk, exercises, subject, students))
+        self.request_thread = Thread(target=self.spam_add, args=(room_id, desk, exercises, subject_id, students))
         self.request_thread.start()
 
         self.update_queue()
         self.exercises_var.set("Exercises chosen: (None)")
 
     """
-    Method for canceling the spam_add method which is run by a thread.
+    Method for canceling the spam_add method which is run by a thread. Very simple method, just sets a bool value....
+    Probably doesn't need a method for this, but oh well.
     """
     def cancel_queue(self):
-        if self.request_thread != None:
-            self.should_stop = True
+        self.should_stop = True
 
-
-    """
-    Thread method. This is the method which continuously sends requests for joining the queue. A thread is created and
-    is told to run this method async so that the program does not suddenly "stops responding". It will continue to send
-    requests until it either gets into the queue or the user presses the cancel button. After every request the thread
-    will sleep a set of milliseconds before proceeding with the next attempt.
-    """
-    def spam_add(self, room_id, desk, exercises, subject, students):
-        status_code, reason, content = self.qs.add_to_queue(subject=subject, roomID=room_id, desk=desk, exercises=exercises, persons=students)
-
-        while status_code != 200 and not self.should_stop:
-            status_code, reason, content = self.qs.add_to_queue(subject=subject, roomID=room_id, desk=desk,
-                                                                exercises=exercises, persons=students)
-            print(status_code)
-            time.sleep(0.2)
-
-        self.update_queue()
 
     """
     Method for setting the current_student_to_add variable. This is needed so that the add button knows which student
@@ -332,30 +322,36 @@ class QSApp(Frame):
     Random troll method for placing a random student into the queue. This of course is not abuse, I promise.
     """
     def add_random_student(self):
-        subject = subjects[self.current_subject]
+        subject_id = subjects_to_id[self.current_subject]
 
-        status_code, reason, people_not_in_queue = self.qs.get_people(subject=subject)
+        status_code, reason, people_not_in_queue = self.qs.get_people(subject_id=subject_id)
         rand = random.choice(people_not_in_queue)
         subject_person_id = rand["subjectPersonID"]
 
-        self.qs.add_person_id(subject=subject, personID=subject_person_id)
+        self.qs.add_person_id(subject_id=subject_id, person_id=subject_person_id)
         self.update_queue()
-    """
-    Method used by update_queue. It takes in an array and fills the listbox with said values.
-    """
-    def set_queue(self, values):
-        self.queue_listbox.delete(0, "end")
-        for val in values:
-            self.queue_listbox.insert("end", val)
-        self.queue_label_text.set("People in queue: {}".format(len(values)))
 
+
+    """
+    Method for removing an entry from the queue_listbox. This method is needed because just replacing the old listbox
+    will lead to all entries being updated which would remove any selection the user has made. Therefore the program 
+    only adds or deletes students from the list if they do not match with the current queue. This way the entire list
+    is not removed and added every time we poll for the queue.
+    """
+    def remove_from_queue_view(self, value):
+        index = 0
+        for val in self.queue_listbox.get(0, "end"):
+            if val == value:
+                self.queue_listbox.delete(index, index)
+                index -= 1
+            index += 1
     """
     Method called every time the user changes subject. When changing subject, the queue is updated based on the subject
     selected from the dropdown.
     """
     def on_subject_change(self, subject):
         self.current_subject = subject
-        self.queue = self.qs.get_queue(subject=subjects[subject])
+        self.queue = self.qs.get_queue(subject_id=subjects_to_id[subject])
 
         self.students_to_add = []
         self.current_student_to_add = None
@@ -363,6 +359,7 @@ class QSApp(Frame):
         self.update_queue()
         self.update_students()
         self.update_students_to_add()
+        self.set_exercises()
 
     """
     Method for deleting a student. Because this cannot be abused what so ever. This method is run every time the delete
@@ -370,7 +367,7 @@ class QSApp(Frame):
     """
     def delete_student(self):
         if self.current_selected_student == None: return
-        self.qs.remove_from_queue_by_id(subject=subjects[self.current_subject], queueID=self.current_selected_student["queueElementID"])
+        self.qs.remove_from_queue_by_id(subject_id=subjects_to_id[self.current_subject], queue_id=self.current_selected_student["queueElementID"])
         self.update_queue()
         self.current_selected_student = None
 
@@ -378,9 +375,16 @@ class QSApp(Frame):
     Method for updating the queue. It will get the current queue for the current subject selected and load it into the
     listbox.
     """
-    def update_queue(self):
+    def update_queue(self, reload=False):
         if self.current_subject != None:
-            self.queue = self.qs.get_queue(subject=subjects[self.current_subject])
+            status_code, reason, content = self.qs.get_queue(subject_id=subjects_to_id[self.current_subject])
+
+            if status_code != 200:
+                self.popup("We could not update the queue!")
+                return
+
+            #self.queue = content
+            self.queue = sorted(content, key=lambda x: x["queueElementPosition"])
 
             values = []
             for q in self.queue:
@@ -389,16 +393,68 @@ class QSApp(Frame):
                 if exercises == "":
                     exercises = "He hacked!"
 
-                values.append("{} {}     {}  {}  {}".format(q["personFirstName"], q["personLastName"], exercises, q["roomNumber"], q["queueElementDesk"]))
+                values.append("{} {}   |  {}  |  {}  |  {}".format(q["personFirstName"], q["personLastName"], exercises, q["roomNumber"], q["queueElementDesk"]))
 
-            self.set_queue(values)
-            self.set_exercises()
+            self.set_queue(values, reload)
+
+
+    """
+    Method used by update_queue. It takes in an array and fills the listbox with said values.
+    """
+
+    def set_queue(self, values, reload=False):
+        if reload:
+            self.queue_listbox.delete(0, "end")
+
+            for val in values:
+                self.queue_listbox.insert("end", val)
+        else:
+            for val in values:
+                if not val in self.queue_listbox.get(0, "end"):
+                    self.queue_listbox.insert("end", val)
+
+            for val in self.queue_listbox.get(0, "end"):
+                if val not in values:
+                    self.remove_from_queue_view(value=val)
+
+
+
+        """
+        TODO: Fix this. The current fix is to hard reset the queue which is less than ideal. But I guess it will have to do.
+        """
+        # for target_index, element in enumerate(self.queue_listbox.get(0, "end")):
+        #     res = element.split(" ")
+        #     if len(res) == 16:
+        #         target_firstname = " ".join([res[0], res[1]])
+        #
+        #         target_lastname = res[2]
+        #     else:
+        #         target_firstname = res[0]
+        #         target_lastname = res[1]
+        #
+        #     for actual_index, stud in enumerate(self.queue):
+        #         firstname = stud["personFirstName"]
+        #         lastname = stud["personLastName"]
+        #
+        #         # print(firstname, lastname)
+        #         # print(target_firstname, target_lastname)
+        #         # print("--------------------------------------------")
+        #
+        #         if firstname == target_firstname  and lastname == target_lastname:
+        #             temp = self.queue[target_index]
+        #             self.queue[target_index] = stud
+        #             self.queue[actual_index] = temp
+
+
+
+
+        self.queue_label_text.set("People in queue: {}".format(len(values)))
 
     """
     Method for getting the number of total exercises in the current subject
     """
     def get_number_of_subjects(self):
-        info = self.qs.get_subject_info(subject=subjects[self.current_subject])
+        info = self.qs.get_subject_info(subject_id=subjects_to_id[self.current_subject])
         return info[-1][0]["subjectExercises"]
 
     """
@@ -437,27 +493,123 @@ class QSApp(Frame):
     """
     def on_check_box(self):
         exercises = self.get_selected_exercises()
-        text = "Exercises chosen: ({})".format(", ".join(self.get_selected_exercises())) if len(exercises) != 0 else "Exercises chosen: (None)"
+        text = "Exercises chosen: ({})".format(", ".join(exercises)) if len(exercises) != 0 else "Exercises chosen: (None)"
         self.exercises_var.set(text)
 
     """
-    Method for updating the listbox containing the students you want to add with you in the queue.
+    Method for updating the listbox containing the students you want to add with you in the queue. 
     """
     def update_students(self):
-        result = self.qs.get_people(subjects[self.current_subject])
+        result = self.qs.get_people(subject_id=subjects_to_id[self.current_subject])
         if result[0] == 200:
             self.students = result[-1]
             self.set_students_to_add([" ".join([stud["personFirstName"], stud["personLastName"]]) for stud in self.students])
         else:
+            self.popup("Could not get students, program crashing #RIP #HopeYouHaveInsurance")
             raise Exception("Could not get students because: {} ({})\nContent: {}".format(result[0], result[1], result[2]))
 
     """
-    Method for setting the values in students_to_add listbox
+    Method for setting the values in students_to_add listbox. TODO: FIX this method. It is broken
     """
     def set_students_to_add(self, student_names):
-        self.student_list.delete(0, "end")
+        # If there is a student which is not in the listbox, then we add it. We therefore only add new people
         for name in student_names:
-            self.student_list.insert("end", name)
+            if not name in self.student_list.get(0, "end"):
+                self.student_list.insert("end", name)
+
+        # If a name is in the listbox but not in self.students, we remove it.
+        for name in self.student_list.get(0, "end"):
+            if name not in student_names:
+                self.remove_from_student_view(value=name)
+
+        # Synchronizes student list and listbox so their indexes are identical. Kind of heavy method but it works.
+        for target_index, name in enumerate(self.student_list.get(0, "end")):
+            res = name.split(" ")
+            if len(res) == 3:
+                firstname = " ".join([res[0], res[1]])
+                lastname = res[-1]
+            else:
+                firstname = res[0]
+                lastname = res[-1]
+
+            for actual_index, stud in enumerate(self.students):
+                target_firstname = stud["personFirstName"]
+                target_lastname = stud["personLastName"]
+
+                if firstname == target_firstname and lastname == target_lastname:
+                    # Swap them
+                    temp = self.students[target_index]
+                    self.students[target_index] = stud
+                    self.students[actual_index] = temp
+
+
+    def remove_from_student_view(self, value):
+        index = 0
+        for name in self.student_list.get(0, "end"):
+            if value == name:
+                self.student_list.delete(index, index)
+                index -= 1
+            index += 1
+
+    def boost_student(self):
+        # Need to boost the current selected student up or down.
+        if self.current_selected_student != None:
+            queue_element_id = self.current_selected_student["queueElementID"]
+            queue_element_position = self.current_selected_student["queueElementPosition"]
+            subject_id = subjects_to_id[self.current_subject]
+
+            self.qs.boost(subject_id=subject_id, queue_id=queue_element_id, queue_position=queue_element_position, steps=1)
+            self.update_queue(reload=True)
+
+            """
+            TODO: Update the current selected student so user can spam button.
+            """
+
+    def derank_student(self):
+        if self.current_selected_student != None:
+            queue_element_id = self.current_selected_student["queueElementID"]
+            queue_element_position = self.current_selected_student["queueElementPosition"]
+            subject_id = subjects_to_id[self.current_subject]
+
+            self.qs.boost(subject_id=subject_id, queue_id=queue_element_id, queue_position=queue_element_position,
+                          steps=-1)
+            self.update_queue(reload=True)
+
+            """
+            TODO: Update the current selected student so user can spam button.
+            """
+
+
+
+    """
+    THREAD methods
+    """
+
+    """
+    Thread method. This is the method which continuously sends requests for joining the queue. A thread is created and
+    is told to run this method async so that the program does not suddenly "stops responding". It will continue to send
+    requests until it either gets into the queue or the user presses the cancel button. After every request the thread
+    will sleep a set of milliseconds before proceeding with the next attempt.
+    """
+
+    def spam_add(self, room_id, desk, exercises, subject_id, students):
+        status_code, reason, content = self.qs.add_to_queue(subject_id=subject_id, room_id=room_id, desk=desk,
+                                                            exercises=exercises, persons=students)
+
+        while status_code != 200 and not self.should_stop:
+            status_code, reason, content = self.qs.add_to_queue(subject_id=subject_id, room_id=room_id, desk=desk,
+                                                                exercises=exercises, persons=students)
+            print(status_code)
+            time.sleep(0.2)
+
+        self.update_queue()
+
+
+    def poll_queue(self):
+        while True:
+            self.update_queue()
+            self.update_students()
+            time.sleep(2)
 
 
 def main():

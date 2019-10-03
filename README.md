@@ -27,4 +27,4 @@ This program is not finished yet and needs to be polished. It works, but it has 
 
 ## Config
 For this program to work, you must add in data in the config files. This would include your token and other data. Example is shown in the image below.
-![alt text](https://ibb.co/cFHFWyh)
+![alt text](https://i.ibb.co/zRYR3mV/Delete-This.jpg)

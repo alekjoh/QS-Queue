@@ -23,3 +23,4 @@ Command Line Interface for joining the QS queue. Has currently only 2 modes, nam
 
 ## QSApp
 Simple GUI made in Tkinter for easy interaction with QS. It has the most important functionalities from QSFokker. It's badly made (huge messy code), but it works and does the job pretty nicely. Makes it very easy to show the queue and add/remove students to/from the queue.
+This program is not finished yet and needs to be polished. It works, but it has some flaws when it comes to updating data like the queue, people you wanted to add etc.
